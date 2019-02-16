@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>F1 Race</title>
+<!-- <meta http-equiv="refresh" content="1" /> -->
+<style type="text/css">
+	canvas {
+		display: block;
+		margin: auto;
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		border: 1px solid #000;
+		background: #000;
+	}
+</style>
+</head>
+<body>
+<script type="text/javascript">
+var canvas,
+	ctx,
+	frame = 60,
+	frames = 0,
+	key = {},
+	states = 1;
+
+var traffic = 3;
+var actor, protSpeed = 3;
+var last = [], xPos = [];
+var randomValue = 0, randX = 0;
+
+var cuttage = 200, gameWidth = 260;
+var canvasWidth = 400, canvasHeight = 600;
+
+var timer = 0, flying = false, startFlying = false;
+
+var LEFT=74, RIGHT=76, FRONT=73, BACK=75, SPACE=32;
+
+var ignition = 0.5;
+var scores = 0, lvl = 1, flies = 1;
+var background, lane = [], cars = [], score, level, fly, keys = {};
+
+(function main() {
+	canvas = document.createElement("canvas");
+	ctx = canvas.getContext("2d");
+	canvas.width = canvasWidth;
+	canvas.height = canvasHeight;
+
+	document.body.appendChild(canvas);
+	run();
+
+	window.addEventListener("keydown", function(evt) {
+		keys[evt.keyCode] = true;
+	});
+	window.addEventListener("keyup", function(evt) {
+		delete keys[evt.keyCode];
+	});
+}) ();
+
+function loadImage(x, y, width, height, src) {
+	var img = new Image();
+	img.src = src;
+
+	ctx.drawImage(img, x, y, width, height);
+}
+
+function Logic(x, y, width, height, label) {
+	this.x = x;
+	this.y = y;
+
+	this.width = width;
+	this.height = height;
+
+	this.draw = function() {
+		ctx.fillStyle = "transparent";
+		ctx.strokeStyle = "yellow";
+		ctx.fillRect(this.x, this.y, this.width, this.height);
+		ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+	}
+
+	this.label = function(value) {
+		var measure;
+        ctx.font = "36px Cambria";
+        ctx.fillStyle = "#f00";
+        measure = ctx.measureText(value);
+        ctx.fillText(label, this.x+5, this.y-3);
+        ctx.fillText(value, canvasWidth-20-measure.width, this.y+36);
+	}
+
+	this.elevate = function(i) {
+		if (scores % 6 == i) {
+			ctx.fillStyle = "#555";
+		}
+		ctx.fillRect(2+this.x+i*16, this.y+23-i*3, 15, 15+i*3);
+	}
+
+	this.update = function(val) {
+		this.draw();
+		this.label(val);
+	}
+
+}
+
+function Protagonist(x, y, width, height) {
+	this.x = x;
+	this.y = y;
+
+	this.width = width;
+	this.height = height;
+
+	
+	this.draw = function() {
+		this.accelerate();
+
+		this.style = new Image();
+		// if (startFlying) {
+			// this.style.src = "actorFly.png";
+		// } else {
+			this.style.src = "actor.png";
+		// }
+		ctx.drawImage(this.style, this.x, this.y, this.width, this.height);
+	}
+
+	this.inputHandler = function() {
+		if (startFlying) {
+			if (timer <= 50) {
+				timer++;
+				flying = true;
+				this.style.src = "actorFly.png";
+				this.y--;
+			} else {
+				flying = false;
+				timer = 0;
+				startFlying = false;
+			}
+		}	
+	}
+
+	this.accelerate = function() {
+		var offset = 140;
+
+		if (keys[SPACE]) {
+			if (flies != 0) {
+				if (!startFlying) {
+					flies--;
+				}
+				startFlying = true;
+			}
+		}
+
+		this.inputHandler();
+
+		if (keys[LEFT] || keys[37]) {
+			this.x -= protSpeed;
+		} else if (keys[RIGHT] || keys[39]) {
+			this.x += protSpeed;
+		} else if ((keys[FRONT] || keys[38]) && !flying) {
+			this.y -= protSpeed;
+		} else if ((keys[BACK] || keys[40]) && !flying) {
+			this.y += protSpeed;
+		}
+
+		if (this.x <= 0) {
+			this.x = 0;
+		} else if (this.x >= canvasWidth-this.width-offset) {
+			this.x = canvasWidth-this.width-offset;
+		}
+		if (this.y <= 0) {
+			this.y = 0;
+		} else if (this.y >= canvasHeight-this.height) {
+			this.y = canvasHeight-this.height;
+		}
+	}
+
+	this.checkCollision = function(other) {
+		var offset = 10;
+
+		var left = this.x+offset;
+		var right = this.x+this.width-offset;
+		var top = this.y+offset;
+		var bottom = this.y+this.height-offset;
+
+		var _left = other.x;
+		var _right = other.x+other.width;
+		var _top = other.y;
+		var _bottom = other.y+other.height;
+
+		var crash = false;
+
+		if (bottom > _top && top < _bottom) {
+			if (right > _left && left < _right) {
+				crash = true;
+			}
+		}
+
+		return crash;
+	}
+	
+	this.update = function() {
+		this.draw();
+	}
+}
+
+function Object(x, y, width, height, color, vel) {
+	this.x = x;
+	this.y = y;
+
+	this.speed = vel;
+	this.style = color;
+
+	this.width = width;
+	this.height = height;
+
+	this.draw = function() {
+		this.accelerate();
+
+		this.style = new Image();
+		this.style.src = color;
+		ctx.drawImage(this.style, this.x, this.y, this.width, this.height);
+	}
+
+	this.accelerate = function() {
+		this.y += this.speed;
+	}
+
+	this.update = function() {
+		this.draw();
+	}
+}
+
+function roadMarking(x, y) {
+
+	this.x = x;
+	this.y = y;
+
+	this.speed = 3;
+
+	this.width = 10;
+	this.height = 40;
+
+	this.draw = function() {
+		this.move();
+
+		ctx.fillStyle = "#fff";
+		ctx.strokeStyle = "#000";
+ 		ctx.fillRect(this.x, this.y, this.width, this.height);
+		ctx.fillRect(this.x+90, this.y, this.width, this.height);
+	}
+
+	this.move = function() {
+		this.y += this.speed;
+	}
+
+	this.reform = function() {
+		this.draw();
+	}
+}
+
+function run() {
+	init();
+	loop();
+}
+
+function init() {
+	score = new Logic(280, 255, 100, 40, "Score");
+	level = new Logic(280, 335, 100, 40, "Level");
+	fly = new Logic(280, 415, 100, 40, "Flyes");
+	background = new Object(0, 0, gameWidth, canvasHeight, "road.png", 0);
+	actor = new Protagonist(103, canvasHeight-122*.8, 70*.8, 122*.8);
+
+	for (var i=0; i < 30; i++) {
+		lane.push(new roadMarking((gameWidth-20)/3, -100+i*50));
+	}
+}
+
+function getRandom(value) {
+	return Math.floor(Math.random() * value);
+}
+
+function overhaul() {
+	var randomX = [7, 103, 193];
+	var speedPack = [4, 4, 5, 7, 4, 4, 5, 5, 5, 5, 6, 4, 5, 4, 4, 7, 7];
+	var carLength = [127, 113, 121, 118, 118, 136, 127, 117, 126, 126, 124, 110, 132, 118, 120, 151, 157];
+
+	if (frames % 17 === 0) {
+		lane.push(new roadMarking((gameWidth-20)/3, -50));
+	}
+	for (var l=0; l < lane.length; l++) {
+		lane[l].reform();
+
+		if (lane[l].y > canvasHeight+lane[l].height) {
+			lane[l] = null;
+			lane.splice(l, 1);
+		}
+	}
+
+	if (frames % frame === 0) {
+		do {
+			randomValue = getRandom(17);
+			last.unshift(randomValue);
+			last.length = 3;
+		} while (last[0] == last[1] && last[0] == last[2]);
+
+		do {
+			randX = randomX[getRandom(3)];
+			xPos.unshift(randX);
+			xPos.length = traffic;
+		} while (xPos[0] == xPos[1] && xPos[0] == xPos[2]);
+
+		cars.push(new Object(randX, -130*.8, 70*.8, carLength[randomValue]*.8, randomValue+1+".png", speedPack[randomValue]+ignition));
+	}
+	for (var i=0; i < cars.length; i++) {
+		if (cars[i].y > canvasHeight+10) {
+			cars[i] = null;
+			cars.splice(i, 1);
+			scores++;
+			if (scores % 6 == 0 &&
+				flies < 9) {
+				flies++;
+			}
+			if (scores % 10 == 0 && 
+				lvl < 8) {
+				lvl++;
+				if (lvl >= 5) {
+					traffic = 2;
+				}
+				frame -= 5;
+				ignition += 0.5;
+				protSpeed += 0.5;
+			}
+		}
+		if (cars[i] != undefined) {
+			cars[i].update();
+		}
+	}
+
+	loadImage(gameWidth, 0, 140, 109, "flag.png");
+	loadImage(gameWidth, 109, 140, 104, "logo.png");
+	loadImage(gameWidth, canvasHeight-130, 140, 130, "footer.png");
+	// console.log(traffic);
+}
+
+
+function startScreen() {
+	// clearAll();
+
+	ctx.fillStyle = "#000";
+	ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+	ctx.fillStyle = "#f00";
+	ctx.font = "48px Dead Kansas";
+	var width = ctx.measureText("PLAY");
+	var message = "Use the left, up, right, down arrow keys, or J, I, L, K keys to move your car respectively. Tap the Spacebar key to fly over incoming cars. Press the Enter key to begin, Enjoy!!";
+	ctx.fillText("PLAY", (canvasWidth-width.width)/2, (canvasHeight-60)/2);
+
+	ctx.font = "15px Dead Kansas";
+
+	var m1 = message.substring(0, 44);
+	var width = ctx.measureText(m1);
+	ctx.fillText(m1.toString(), (canvasWidth-width.width)/2, canvasHeight/2);
+
+	var m2 = message.substring(44, 92);
+	var width = ctx.measureText(m2);
+	ctx.fillText(m2.toString(), (canvasWidth-width.width)/2, canvasHeight/2+20);
+
+	var m3 = message.substring(92, 139);
+	var width = ctx.measureText(m3);
+	ctx.fillText(m3.toString(), (canvasWidth-width.width)/2, canvasHeight/2+40);
+
+	var m4 = message.substring(139, 177);
+	var width = ctx.measureText(m4);
+	ctx.fillText(m4.toString(), (canvasWidth-width.width)/2, canvasHeight/2+60);
+}
+
+function gameOver() {
+
+	ctx.fillStyle = "#000";
+	ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+	ctx.fillStyle = "#f00";
+	ctx.font = "48px Dead Kansas";
+	var width = ctx.measureText("GAME OVER");
+	var message = "Press the Enter key to try again.";
+	ctx.fillText("GAME OVER", (canvasWidth-width.width)/2, (canvasHeight-60)/2);
+
+	ctx.font = "15px Dead Kansas";
+
+	var m1 = message.substring(0, 44);
+	var width = ctx.measureText(m1);
+	ctx.fillText(m1.toString(), (canvasWidth-width.width)/2, canvasHeight/2);
+
+}
+
+function update() {
+	clearAll();
+
+	background.draw();
+	score.update(scores);
+	level.update(lvl);
+	fly.update(flies);
+	for (var i=0; i < 5; i++) {
+		fly.elevate(i);
+	}
+	overhaul();
+	actor.update();
+
+	for (var i=0; i < cars.length; i++) {
+		if (actor.checkCollision(cars[i]) && !flying) {
+			states = 3;
+		}
+	}
+}
+
+function clearAll() {
+	ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+}
+
+function loop() {
+	frames++;
+
+	if (states == 1) {
+		startScreen();
+		if (keys[13]) {
+			states = 2;
+		}
+	} else if (states == 2) {
+		update();
+	} else if (states == 3) {
+		gameOver();
+		if (keys[13]) {
+			document.location.reload();
+		}
+	}
+	window.requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
